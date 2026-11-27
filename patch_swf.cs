@@ -568,6 +568,99 @@ class PatchSwf
             b.MaxStackSize = Math.Max(b.MaxStackSize, 6);
         }
 
+        // ============================================================
+        // PATCH G: TabControlPainter.DrawTab — fix dark theme tab text
+        // ============================================================
+        // Two issues:
+        // 1. DrawTab uses SystemBrushes.ControlText (black) instead of
+        //    page.ForeColor for tab text → black on dark background.
+        // 2. When DrawMode == OwnerDrawFixed (set by KeeTheme), DrawTab
+        //    skips ALL text drawing and delegates to OnDrawItemInternal.
+        //    KeeTheme's NativeWindow paint handler doesn't work on Mono,
+        //    so nobody draws the text → invisible tabs.
+        // Fix: replace SystemBrushes.ControlText with page.ForeColor,
+        //      AND on Unix, skip the DrawMode check so text is always drawn.
+        Console.WriteLine("  Patching TabControlPainter.DrawTab (tab text color)...");
+
+        var tabPainterType = module.Types.FirstOrDefault(t =>
+            t.FullName == "System.Windows.Forms.Theming.Default.TabControlPainter");
+        var drawTab = tabPainterType.Methods.First(m =>
+            m.Name == "DrawTab" && m.Parameters.Count == 5);
+        {
+            var b = drawTab.Body;
+            var instrs = b.Instructions;
+
+            var solidBrushType = module.ImportReference(typeof(System.Drawing.SolidBrush)).Resolve();
+            var solidBrushCtor = module.ImportReference(
+                solidBrushType.Methods.First(m => m.IsConstructor && m.Parameters.Count == 1 &&
+                    m.Parameters[0].ParameterType.FullName == "System.Drawing.Color"));
+
+            var controlGetForeColor = module.ImportReference(
+                ctrlType.Methods.First(m => m.Name == "get_ForeColor" && !m.HasParameters));
+
+            var p = b.GetILProcessor();
+
+            // Part 1: On Unix, neutralize the DrawMode check that skips text drawing.
+            // Pattern: callvirt TabControl::get_DrawMode() / brtrue <skip>
+            // Replace brtrue with pop (drop the DrawMode value, never branch).
+            int drawModeFixed = 0;
+            for (int i = 0; i < instrs.Count - 1; i++) {
+                if (instrs[i].OpCode == OpCodes.Callvirt &&
+                    instrs[i].Operand is MethodReference dm &&
+                    dm.Name == "get_DrawMode" &&
+                    dm.DeclaringType.Name == "TabControl" &&
+                    instrs[i + 1].OpCode == OpCodes.Brtrue) {
+
+                    // On Unix: replace "callvirt get_DrawMode; brtrue skip"
+                    // with "pop; nop" — the ldarg.3 before pushes tab ref,
+                    // pop discards it, nop fills the brtrue slot.
+                    // Actually ldarg.3 is the instruction before instrs[i].
+                    // callvirt get_DrawMode consumes the ref and pushes int.
+                    // brtrue consumes the int.
+                    // We want to: not call get_DrawMode, not branch.
+                    // Replace callvirt with pop (consumes the tab ref from ldarg.3)
+                    // Replace brtrue with nop
+
+                    var callInstr = instrs[i];
+                    var brInstr = instrs[i + 1];
+
+                    // Wrap in RunningOnUnix check:
+                    // if (RunningOnUnix) { pop; nop; } else { callvirt get_DrawMode; brtrue; }
+                    // This is complex in IL. Simpler: just NOP both unconditionally.
+                    // The only effect is that OwnerDraw tabs will draw text via Mono's
+                    // default path instead of delegating. On Windows .NET, this code
+                    // is never used (different Theme engine), so it's safe.
+
+                    p.Replace(callInstr, p.Create(OpCodes.Pop));
+                    p.Replace(brInstr, p.Create(OpCodes.Nop));
+                    drawModeFixed++;
+                    break;
+                }
+            }
+            Console.WriteLine("    DrawMode skip branches neutralized: {0}", drawModeFixed);
+
+            // Part 2: Replace SystemBrushes.ControlText with page.ForeColor
+            int colorFixed = 0;
+            for (int i = 0; i < instrs.Count; i++) {
+                if (instrs[i].OpCode == OpCodes.Call &&
+                    instrs[i].Operand is MethodReference mr &&
+                    mr.Name == "get_ControlText" &&
+                    mr.DeclaringType.FullName == "System.Drawing.SystemBrushes") {
+
+                    var target = instrs[i];
+                    p.InsertBefore(target, p.Create(OpCodes.Ldarg_2));
+                    p.InsertBefore(target, p.Create(OpCodes.Callvirt, controlGetForeColor));
+                    p.InsertBefore(target, p.Create(OpCodes.Newobj, solidBrushCtor));
+                    p.Remove(target);
+                    i += 2;
+                    colorFixed++;
+                }
+            }
+
+            Console.WriteLine("    SystemBrushes.ControlText → page.ForeColor: {0}", colorFixed);
+            b.MaxStackSize = Math.Max(b.MaxStackSize, 4);
+        }
+
         asm.Write(outputPath, new WriterParameters());
         Console.WriteLine("  Saved to: " + outputPath);
         return 0;
