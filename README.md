@@ -1,10 +1,10 @@
 # mono-hidpi-patch
 
-Fix Mono WinForms HiDPI scaling on Linux.
+Fix Mono WinForms HiDPI scaling on Linux — originally developed for [KeePass](https://keepass.info/) on [niri](https://github.com/YaLTeR/niri) (Wayland) with [xwayland-satellite](https://github.com/Supreeeme/xwayland-satellite), but works for **any Mono WinForms application** on HiDPI displays.
 
 Mono's `libgdiplus` renders text at 96 DPI regardless of `Xft.dpi`, but `Font.Height` and `Graphics.DpiX` **do** respect it. This mismatch means `AutoScaleMode.Font` never triggers on HiDPI displays, leaving forms tiny with overlapping controls.
 
-This patcher uses [Mono.Cecil](https://github.com/jbevain/cecil) to fix 6 methods across two Mono DLLs, making all WinForms apps (KeePass, etc.) scale correctly.
+This patcher uses [Mono.Cecil](https://github.com/jbevain/cecil) to fix 6 methods across two Mono DLLs, making WinForms apps scale correctly.
 
 ## What it fixes
 
