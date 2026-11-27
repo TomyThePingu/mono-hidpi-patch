@@ -1,0 +1,28 @@
+post_install() {
+    echo ""
+    echo "==> SYSTEM-WIDE (patches /usr/lib/mono/gac/ — needs re-applying after mono updates):"
+    echo "    sudo /usr/lib/mono-hidpi-patch/apply-patch.sh apply"
+    echo ""
+    echo "==> To restore originals:"
+    echo "    sudo /usr/lib/mono-hidpi-patch/apply-patch.sh restore"
+    echo ""
+    echo "==> USER-LOCAL alternative (no root, survives mono updates):"
+    echo "    mkdir -p ~/.local/lib/mono/gac/System.Drawing/4.0.0.0__b03f5f7f11d50a3a"
+    echo "    mkdir -p ~/.local/lib/mono/gac/System.Windows.Forms/4.0.0.0__b77a5c561934e089"
+    echo "    mono /usr/lib/mono-hidpi-patch/patch_swf.exe /usr/lib/mono/gac/  ~/.local/lib/mono/gac/"
+    echo "    Then launch apps with: MONO_GAC_PREFIX=~/.local <app>"
+    echo ""
+    echo "==> For KeePass: 'keepass-hidpi' wrapper installed to /usr/bin"
+}
+
+post_upgrade() {
+    post_install
+}
+
+pre_remove() {
+    if [[ -f /usr/lib/mono/gac/System.Drawing/4.0.0.0__b03f5f7f11d50a3a/System.Drawing.dll.orig ]] || \
+       [[ -f /usr/lib/mono/gac/System.Windows.Forms/4.0.0.0__b77a5c561934e089/System.Windows.Forms.dll.orig ]]; then
+        echo "==> Restoring original Mono DLLs..."
+        /usr/lib/mono-hidpi-patch/apply-patch.sh restore || true
+    fi
+}

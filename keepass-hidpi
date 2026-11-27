@@ -1,0 +1,14 @@
+#!/bin/sh
+# keepass-hidpi — Launch KeePass with HiDPI scaling on Wayland/X11
+#
+# Sets Xft.dpi so Mono reads the correct display DPI.
+# xwayland-satellite publishes 96*ceil(scale) which oversizes things
+# at fractional scales — override with the real value: 96 * scale.
+#
+# Set KEEPASS_DPI to override (e.g. KEEPASS_DPI=192 for 2x scale).
+# Default 216 = 96 * 2.25.
+
+command -v xrdb >/dev/null && echo "Xft.dpi: ${KEEPASS_DPI:-216}" | xrdb -merge
+export MONO_GAC_PREFIX="${HOME}/.local${MONO_GAC_PREFIX:+:$MONO_GAC_PREFIX}"
+export LD_LIBRARY_PATH=/usr/share/keepass${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+exec keepass "$@"

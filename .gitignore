@@ -1,0 +1,33 @@
+# Compiled output
+*.exe
+*.dll
+*.dll.orig
+*.dll.patched*
+*.pkg.tar.zst
+*.pkg.tar.xz
+
+# Mono WinForms resources (not ours)
+*.png
+*.ico
+*.bmp
+*.cur
+*.resources
+
+# Working directories
+orig/
+v1/
+patched*/
+pkg/
+src/
+
+# IL dumps and reference files
+*.il
+swf_res
+*.cs.orig
+*.cs.patched
+*.cs.upstream
+TextRenderer.cs
+ContainerControl.cs.*
+
+# Old patches
+mono-hidpi-autoscale.patch
